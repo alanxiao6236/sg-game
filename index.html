@@ -343,7 +343,6 @@ const TILE_W = 52;
 const TILE_H = 62;
 const LAYER_OFFSET_X = 5;
 const LAYER_OFFSET_Y = 5;
-const OCCLUDE_THRESHOLD = 42;
 
 // ==================== GAME STATE ====================
 let tiles = [];
@@ -393,7 +392,35 @@ function generateTiles() {
   shuffle(pool);
 
   totalTiles = pool.length;
-  const perLayer = Math.ceil(totalTiles / NUM_LAYERS);
+
+  // Weighted layer distribution: more tiles on lower layers, fewer on top
+  // This ensures upper layers have more spacing → more clickable cards
+  const weights = [];
+  for (let i = 0; i < NUM_LAYERS; i++) {
+    weights.push(NUM_LAYERS - i * 0.5);
+  }
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let rawCounts = weights.map(w => Math.max(2, Math.round(totalTiles * w / totalWeight)));
+  // Adjust to match total
+  let sum = rawCounts.reduce((a, b) => a + b, 0);
+  while (sum > totalTiles) {
+    let maxI = 0;
+    for (let i = 1; i < NUM_LAYERS; i++) { if (rawCounts[i] > rawCounts[maxI]) maxI = i; }
+    rawCounts[maxI]--;
+    sum--;
+  }
+  while (sum < totalTiles) {
+    rawCounts[0]++;
+    sum++;
+  }
+
+  // Assign tiles to layers
+  const layerAssignments = [];
+  for (let l = 0; l < NUM_LAYERS; l++) {
+    for (let i = 0; i < rawCounts[l]; i++) {
+      layerAssignments.push(l);
+    }
+  }
 
   // Calculate spacing
   const padX = 12;
@@ -402,7 +429,7 @@ function generateTiles() {
   const usableH = areaH - TILE_H - padY * 2 - (NUM_LAYERS - 1) * LAYER_OFFSET_Y;
 
   pool.forEach((ch, idx) => {
-    const layer = Math.floor(idx / perLayer);
+    const layer = layerAssignments[idx];
     const lx = padX + Math.random() * Math.max(usableW, 60);
     const ly = padY + Math.random() * Math.max(usableH, 60);
     tiles.push({
@@ -416,18 +443,23 @@ function generateTiles() {
     });
   });
 
-  // Sort by layer for rendering
+  // Sort by visual stacking order (layer, then y, then x)
   tiles.sort((a, b) => a.layer - b.layer || a.y - b.y || a.x - b.x);
-  // Re-assign ids after sort
-  tiles.forEach((t, i) => t.id = i);
+  // Re-assign ids after sort and compute zOrder for consistent rendering + occlusion
+  tiles.forEach((t, i) => {
+    t.id = i;
+    t.zOrder = i; // stacking order matches sort order
+  });
 }
 
 function updateBlockedState() {
   tiles.forEach(t => {
     if (t.removed) return;
+    // A tile is blocked if any tile rendered ABOVE it (higher zOrder) overlaps its rectangle.
+    // zOrder matches the sort order (layer → y → x), consistent with visual stacking.
     t.blocked = tiles.some(o =>
       !o.removed &&
-      o.layer > t.layer &&
+      o.zOrder > t.zOrder &&
       Math.abs(o.x - t.x) < TILE_W &&
       Math.abs(o.y - t.y) < TILE_H
     );
@@ -444,7 +476,7 @@ function renderTiles() {
     el.className = 'tile' + (t.blocked ? ' blocked' : '');
     el.style.left = t.x + 'px';
     el.style.top = t.y + 'px';
-    el.style.zIndex = t.layer * 100 + Math.floor(t.y);
+    el.style.zIndex = t.zOrder;
     el.style.borderColor = t.blocked ? '#C8C0B4' : t.char.color + '80';
     el.innerHTML =
       `<img src="${getImgSrc(t.char.id)}" alt="${t.char.name}" onerror="this.style.display='none';this.parentNode.innerHTML='<span style=\\'font-size:24px\\'>${getCharEmoji(t.char.id)}</span>' + this.parentNode.querySelector('.tile-name').outerHTML">` +
