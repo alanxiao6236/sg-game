@@ -247,13 +247,21 @@
     凑齐 3 个相同人物即可消除<br>
     清除全部方块即通关
   </div>
-  <div class="difficulty-area">
-    <div class="start-deco" style="margin:8px 0;padding:6px 0">选择难度</div>
-    <button class="btn diff-btn" style="background:#27AE60;color:#fff" onclick="startGame('easy')">🌱 简单 <span class="diff-desc">8种卡片 · 5层</span></button>
-    <button class="btn diff-btn" style="background:#E67E22;color:#fff" onclick="startGame('hard')">🔥 困难 <span class="diff-desc">10种卡片 · 8层</span></button>
-    <button class="btn diff-btn" style="background:#C0392B;color:#fff" onclick="startGame('nightmare')">💀 噩梦 <span class="diff-desc">15种卡片 · 12层</span></button>
-  </div>
+  <button class="btn btn-primary" onclick="showScreen('diffScreen')">开始挑战</button>
   <button class="btn btn-outline" onclick="showLeaderboard()">排行榜</button>
+</div>
+
+<!-- ========== DIFFICULTY SCREEN ========== -->
+<div id="diffScreen" class="screen">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px 20px">
+    <div class="start-title" style="font-size:24px;margin-bottom:8px">选择难度</div>
+    <div class="difficulty-area">
+      <button class="btn diff-btn" style="background:#27AE60;color:#fff" onclick="startGame('easy')">🌱 简单 <span class="diff-desc">8种卡片 · 5层</span></button>
+      <button class="btn diff-btn" style="background:#E67E22;color:#fff" onclick="startGame('hard')">🔥 困难 <span class="diff-desc">10种卡片 · 8层</span></button>
+      <button class="btn diff-btn" style="background:#C0392B;color:#fff" onclick="startGame('nightmare')">💀 噩梦 <span class="diff-desc">15种卡片 · 12层</span></button>
+    </div>
+    <button class="btn btn-outline" style="margin-top:12px" onclick="showScreen('startScreen')">返回</button>
+  </div>
 </div>
 
 <!-- ========== GAME SCREEN ========== -->
