@@ -136,6 +136,31 @@
       75% { transform: translateX(4px); }
     }
 
+    /* Removed Tray */
+    .tray-wrap {
+      width: 100%; max-width: 380px;
+    }
+    .tray-label {
+      font-size: 10px; color: #8C8C8C; margin-bottom: 2px; padding-left: 4px;
+    }
+    .removed-tray {
+      display: flex; gap: 4px; padding: 6px 8px;
+      background: #F0F7FF; border: 2px solid #7EB6E8;
+      border-radius: 14px; min-height: 52px;
+      align-items: center; flex-wrap: wrap;
+    }
+    .removed-tray:empty::after {
+      content: '\6682\65E0\79FB\51FA\5361\7247'; color: #B0C4D8; font-size: 12px;
+    }
+    .tray-tile {
+      width: 40px; height: 40px; border-radius: 8px;
+      border: 2px solid #7EB6E8; background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s; overflow: hidden;
+    }
+    .tray-tile img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; pointer-events: none; }
+    .tray-tile:active { transform: scale(0.9); border-color: #F2C94C; }
+
     /* Props */
     .props-area { display: flex; gap: 10px; margin: 4px 0 8px; }
     .prop-btn {
@@ -238,6 +263,11 @@
 
   <div class="slot-area" id="slotArea"></div>
 
+  <div class="tray-wrap">
+    <div class="tray-label">&#128230; 移出栏（点击卡片可放回槽位）</div>
+    <div class="removed-tray" id="removedTray"></div>
+  </div>
+
   <div class="props-area">
     <div class="prop-btn" id="propUndo" onclick="useProp('undo')">
       <span class="icon">&#8617;&#65039;</span>
@@ -252,7 +282,7 @@
     <div class="prop-btn" id="propRemove" onclick="useProp('remove')">
       <span class="icon">&#128228;</span>
       <span class="label">移出</span>
-      <span class="count" id="removeCount">&times;1</span>
+      <span class="count" id="removeCount">&times;3</span>
     </div>
   </div>
 
@@ -348,6 +378,7 @@ const LAYER_OFFSET_Y = 5;
 // ==================== GAME STATE ====================
 let tiles = [];
 let slots = [];
+let removedTray = [];
 let totalTiles = 0;
 let moveCount = 0;
 let startTime = 0;
@@ -517,6 +548,39 @@ function renderSlots() {
   }
 }
 
+function renderRemovedTray() {
+  const tray = document.getElementById('removedTray');
+  tray.innerHTML = '';
+  removedTray.forEach((tile, idx) => {
+    const el = document.createElement('div');
+    el.className = 'tray-tile';
+    el.innerHTML = `<img src="${getImgSrc(tile.char.id)}" alt="${tile.char.name}" onerror="this.outerHTML='<span style=\\'font-size:18px\\'>${getCharEmoji(tile.char.id)}</span>'">`;
+    el.onclick = () => returnFromTray(idx);
+    tray.appendChild(el);
+  });
+}
+
+function returnFromTray(idx) {
+  if (gameOver) return;
+  if (slots.length >= 7) return; // slots full
+  const tile = removedTray.splice(idx, 1)[0];
+  // Insert into slots using same grouping logic as pickTile
+  let insertIdx = slots.length;
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i].char.id === tile.char.id) {
+      insertIdx = i + 1;
+      while (insertIdx < slots.length && slots[insertIdx].char.id === tile.char.id) {
+        insertIdx++;
+      }
+      break;
+    }
+  }
+  slots.splice(insertIdx, 0, tile);
+  renderRemovedTray();
+  renderSlots();
+  setTimeout(() => checkMatch(), 180);
+}
+
 function renderLegend() {
   const el = document.getElementById('charLegend');
   el.innerHTML = CHARACTERS.map(ch =>
@@ -537,12 +601,12 @@ function updateProgress() {
 }
 
 function updateProps() {
-  document.getElementById('undoCount').textContent = `×${1 - propsUsed.undo}`;
-  document.getElementById('shuffleCount').textContent = `×${1 - propsUsed.shuffle}`;
-  document.getElementById('removeCount').textContent = `×${1 - propsUsed.remove}`;
-  document.getElementById('propUndo').classList.toggle('used', propsUsed.undo >= 1);
-  document.getElementById('propShuffle').classList.toggle('used', propsUsed.shuffle >= 1);
-  document.getElementById('propRemove').classList.toggle('used', propsUsed.remove >= 1);
+  document.getElementById('undoCount').textContent = `×${PROP_MAX.undo - propsUsed.undo}`;
+  document.getElementById('shuffleCount').textContent = `×${PROP_MAX.shuffle - propsUsed.shuffle}`;
+  document.getElementById('removeCount').textContent = `×${PROP_MAX.remove - propsUsed.remove}`;
+  document.getElementById('propUndo').classList.toggle('used', propsUsed.undo >= PROP_MAX.undo);
+  document.getElementById('propShuffle').classList.toggle('used', propsUsed.shuffle >= PROP_MAX.shuffle);
+  document.getElementById('propRemove').classList.toggle('used', propsUsed.remove >= PROP_MAX.remove);
 }
 
 // ==================== TIMER ====================
@@ -604,7 +668,7 @@ function checkMatch() {
       // Check win after a brief delay
       setTimeout(() => {
         const remaining = tiles.filter(t => !t.removed).length;
-        if (remaining === 0 && slots.length === 0) {
+        if (remaining === 0 && slots.length === 0 && removedTray.length === 0) {
           showWin();
         } else {
           checkMatch(); // Check for chain matches
@@ -640,9 +704,10 @@ function showLose() {
 }
 
 // ==================== POWER-UPS ====================
+const PROP_MAX = { undo: 1, shuffle: 1, remove: 3 };
 function useProp(type) {
   if (gameOver) return;
-  if (propsUsed[type] >= 1) return;
+  if (propsUsed[type] >= PROP_MAX[type]) return;
   propsUsed[type]++;
 
   if (type === 'undo') {
@@ -652,10 +717,13 @@ function useProp(type) {
     t.removed = false;
     const slotIdx = slots.indexOf(t);
     if (slotIdx >= 0) slots.splice(slotIdx, 1);
+    const trayIdx = removedTray.indexOf(t);
+    if (trayIdx >= 0) removedTray.splice(trayIdx, 1);
     lastRemovedTile = null;
     updateBlockedState();
     renderTiles();
     renderSlots();
+    renderRemovedTray();
   }
   else if (type === 'shuffle') {
     const active = tiles.filter(t => !t.removed);
@@ -668,22 +736,15 @@ function useProp(type) {
     renderTiles();
   }
   else if (type === 'remove') {
-    if (slots.length < 3) { propsUsed.remove--; return; }
-    // Remove first 3 tiles from slots permanently
-    const removed = slots.splice(0, 3);
-    // Mark them as removed in tiles array
-    removed.forEach(slotTile => {
-      const t = tiles.find(tt => tt.id === slotTile.id);
-      if (t) t.removed = true;
+    if (slots.length === 0) { propsUsed.remove--; return; }
+    // Move first 3 tiles (or all if fewer) from slots to removed tray
+    const count = Math.min(3, slots.length);
+    const moved = slots.splice(0, count);
+    moved.forEach(slotTile => {
+      removedTray.push(slotTile);
     });
-    updateBlockedState();
-    renderTiles();
     renderSlots();
-    // Check if this triggers a win
-    const remaining = tiles.filter(t => !t.removed).length;
-    if (remaining === 0 && slots.length === 0) {
-      setTimeout(showWin, 300);
-    }
+    renderRemovedTray();
   }
 
   updateProps();
@@ -737,6 +798,7 @@ function showLeaderboard() {
 function startGame() {
   gameOver = false;
   slots = [];
+  removedTray = [];
   moveCount = 0;
   propsUsed = { undo: 0, shuffle: 0, remove: 0 };
   lastRemovedTile = null;
@@ -750,6 +812,7 @@ function startGame() {
       updateBlockedState();
       renderTiles();
       renderSlots();
+      renderRemovedTray();
       renderLegend();
       updateProps();
       startTimer();
