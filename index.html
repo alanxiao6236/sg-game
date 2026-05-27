@@ -369,7 +369,7 @@ const CHARACTERS = [
 ];
 
 const TILE_COUNT_PER_CHAR = 6;  // 15 chars x 6 = 90 tiles total
-const NUM_LAYERS = 20;
+const NUM_LAYERS = 12;
 const TILE_W = 52;
 const TILE_H = 62;
 const LAYER_OFFSET_X = 5;
@@ -425,11 +425,11 @@ function generateTiles() {
 
   totalTiles = pool.length;
 
-  // Weighted layer distribution: more tiles on lower layers, fewer on top
-  // This ensures upper layers have more spacing → more clickable cards
+  // Weighted layer distribution: MORE tiles on upper layers (higher index)
+  // This ensures the starting state has many clickable cards on top
   const weights = [];
   for (let i = 0; i < NUM_LAYERS; i++) {
-    weights.push(NUM_LAYERS - i * 0.5);
+    weights.push(1 + i * 0.8);
   }
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   let rawCounts = weights.map(w => Math.max(2, Math.round(totalTiles * w / totalWeight)));
@@ -442,7 +442,7 @@ function generateTiles() {
     sum--;
   }
   while (sum < totalTiles) {
-    rawCounts[0]++;
+    rawCounts[NUM_LAYERS - 1]++;
     sum++;
   }
 
@@ -460,10 +460,47 @@ function generateTiles() {
   const usableW = areaW - TILE_W - padX * 2 - (NUM_LAYERS - 1) * LAYER_OFFSET_X;
   const usableH = areaH - TILE_H - padY * 2 - (NUM_LAYERS - 1) * LAYER_OFFSET_Y;
 
+  // Top layers use grid-based placement to prevent same-layer overlap
+  const TOP_LAYERS = 3;
+  const gridCols = Math.max(3, Math.floor(Math.max(usableW, 60) / (TILE_W + 6)));
+  const gridRows = Math.max(3, Math.floor(Math.max(usableH, 60) / (TILE_H + 4)));
+  const gridCellW = Math.max(usableW, 60) / gridCols;
+  const gridCellH = Math.max(usableH, 60) / gridRows;
+
+  // Pre-generate shuffled grid positions for each top layer
+  const topLayerOffset = NUM_LAYERS - TOP_LAYERS;
+  const topLayerGrids = [];
+  for (let l = 0; l < TOP_LAYERS; l++) {
+    const positions = [];
+    for (let r = 0; r < gridRows; r++) {
+      for (let c = 0; c < gridCols; c++) {
+        positions.push({
+          x: padX + c * gridCellW + (gridCellW - TILE_W) / 2 + (Math.random() - 0.5) * 4,
+          y: padY + r * gridCellH + (gridCellH - TILE_H) / 2 + (Math.random() - 0.5) * 4,
+        });
+      }
+    }
+    shuffle(positions);
+    topLayerGrids.push(positions);
+  }
+  const gridIdx = new Array(TOP_LAYERS).fill(0);
+
   pool.forEach((ch, idx) => {
     const layer = layerAssignments[idx];
-    const lx = padX + Math.random() * Math.max(usableW, 60);
-    const ly = padY + Math.random() * Math.max(usableH, 60);
+    let lx, ly;
+
+    if (layer >= topLayerOffset) {
+      const gridLayerIdx = layer - topLayerOffset;
+      const posIdx = gridIdx[gridLayerIdx] % topLayerGrids[gridLayerIdx].length;
+      const pos = topLayerGrids[gridLayerIdx][posIdx];
+      gridIdx[gridLayerIdx]++;
+      lx = pos.x;
+      ly = pos.y;
+    } else {
+      lx = padX + Math.random() * Math.max(usableW, 60);
+      ly = padY + Math.random() * Math.max(usableH, 60);
+    }
+
     tiles.push({
       id: idx,
       char: ch,
@@ -480,7 +517,7 @@ function generateTiles() {
   // Re-assign ids after sort and compute zOrder for consistent rendering + occlusion
   tiles.forEach((t, i) => {
     t.id = i;
-    t.zOrder = i; // stacking order matches sort order
+    t.zOrder = i;
   });
 }
 
