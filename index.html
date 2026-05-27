@@ -537,8 +537,8 @@ function generateTiles() {
     tiles.push({
       id: idx,
       char: ch,
-      x: lx + layer * LAYER_OFFSET_X,
-      y: ly + layer * LAYER_OFFSET_Y,
+      x: Math.max(padX, Math.min(lx + layer * LAYER_OFFSET_X, areaW - TILE_W - padX)),
+      y: Math.max(padY, Math.min(ly + layer * LAYER_OFFSET_Y, areaH - TILE_H - padY)),
       layer: layer,
       removed: false,
       blocked: false,
