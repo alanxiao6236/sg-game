@@ -53,6 +53,16 @@
     }
     .btn-text { background: none; border: none; color: #8C8C8C; font-size: 14px; cursor: pointer; padding: 8px; }
     .btn-text:active { color: #D94F4F; }
+    .difficulty-area { display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: center; }
+    .diff-btn {
+      width: 220px; display: flex; align-items: center; justify-content: center; gap: 6px;
+      font-size: 16px; padding: 12px 0;
+    }
+    .diff-desc { font-size: 11px; font-weight: 400; opacity: 0.85; }
+    .diff-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 700; color: #fff;
+    }
 
     /* ===== Game Screen ===== */
     #gameScreen { padding: 8px 12px; }
@@ -237,7 +247,12 @@
     凑齐 3 个相同人物即可消除<br>
     清除全部方块即通关
   </div>
-  <button class="btn btn-primary" onclick="startGame()">开始挑战</button>
+  <div class="difficulty-area">
+    <div class="start-deco" style="margin:8px 0;padding:6px 0">选择难度</div>
+    <button class="btn diff-btn" style="background:#27AE60;color:#fff" onclick="startGame('easy')">🌱 简单 <span class="diff-desc">8种卡片 · 5层</span></button>
+    <button class="btn diff-btn" style="background:#E67E22;color:#fff" onclick="startGame('hard')">🔥 困难 <span class="diff-desc">10种卡片 · 8层</span></button>
+    <button class="btn diff-btn" style="background:#C0392B;color:#fff" onclick="startGame('nightmare')">💀 噩梦 <span class="diff-desc">15种卡片 · 12层</span></button>
+  </div>
   <button class="btn btn-outline" onclick="showLeaderboard()">排行榜</button>
 </div>
 
@@ -246,6 +261,7 @@
   <div class="game-header">
     <div class="hdr-left">
       <button class="hdr-btn" onclick="backToStart()">&#8592; 返回</button>
+      <span class="diff-badge" id="diffBadge"></span>
     </div>
     <div class="timer" id="timer">00:00</div>
     <div class="hdr-right">
@@ -350,7 +366,7 @@ const IMAGE_DATA = {
   </script>
 <script>
 // ==================== CONFIGURATION ====================
-const CHARACTERS = [
+const ALL_CHARACTERS = [
   { id: 'liubei',      name: '刘备',   color: '#4A90D9' },
   { id: 'guanyu',      name: '关羽',   color: '#E74C3C' },
   { id: 'zhangfei',    name: '张飞',   color: '#2C3E50' },
@@ -368,8 +384,17 @@ const CHARACTERS = [
   { id: 'daqiao',      name: '大乔',   color: '#AF7AC5' },
 ];
 
-const TILE_COUNT_PER_CHAR = 6;  // 15 chars x 6 = 90 tiles total
-const NUM_LAYERS = 12;
+const DIFFICULTIES = {
+  easy:      { name: '简单', desc: '8种卡片 · 5层', chars: 8,  layers: 5,  color: '#27AE60', icon: '🌱' },
+  hard:      { name: '困难', desc: '10种卡片 · 8层', chars: 10, layers: 8,  color: '#E67E22', icon: '🔥' },
+  nightmare: { name: '噩梦', desc: '15种卡片 · 12层', chars: 15, layers: 12, color: '#C0392B', icon: '💀' },
+};
+
+let CHARACTERS = [];
+let NUM_LAYERS = 12;
+let currentDifficulty = 'easy';
+
+const TILE_COUNT_PER_CHAR = 6;
 const TILE_W = 52;
 const TILE_H = 62;
 const LAYER_OFFSET_X = 5;
@@ -800,8 +825,9 @@ function saveLeaderboard(lb) {
 function saveScore() {
   const name = (document.getElementById('playerNameInput').value || '无名英雄').trim().slice(0, 8);
   const elapsed = Date.now() - startTime;
+  const diff = DIFFICULTIES[currentDifficulty];
   const lb = getLeaderboard();
-  lb.push({ name, time: elapsed, timeStr: formatTime(elapsed), moves: moveCount, date: new Date().toLocaleDateString() });
+  lb.push({ name, time: elapsed, timeStr: formatTime(elapsed), moves: moveCount, diff: currentDifficulty, diffName: diff.name, date: new Date().toLocaleDateString() });
   lb.sort((a, b) => a.time - b.time);
   saveLeaderboard(lb.slice(0, 20));
   closeModal('winModal');
@@ -818,11 +844,12 @@ function showLeaderboard() {
   } else {
     const medals = ['🥇', '🥈', '🥉'];
     el.innerHTML = `<table class="lb-table">
-      <thead><tr><th>#</th><th>玩家</th><th>用时</th><th>操作</th></tr></thead>
+      <thead><tr><th>#</th><th>玩家</th><th>难度</th><th>用时</th><th>操作</th></tr></thead>
       <tbody>${lb.slice(0, 10).map((e, i) => `
         <tr>
           <td>${medals[i] || (i + 1)}</td>
           <td>${e.name}</td>
+          <td>${e.diffName || '-'}</td>
           <td>${e.timeStr}</td>
           <td>${e.moves || '-'}</td>
         </tr>`).join('')}
@@ -832,13 +859,24 @@ function showLeaderboard() {
 }
 
 // ==================== NAVIGATION ====================
-function startGame() {
+function startGame(difficulty) {
+  // Configure difficulty
+  currentDifficulty = difficulty || 'easy';
+  const diff = DIFFICULTIES[currentDifficulty];
+  CHARACTERS = ALL_CHARACTERS.slice(0, diff.chars);
+  NUM_LAYERS = diff.layers;
+
   gameOver = false;
   slots = [];
   removedTray = [];
   moveCount = 0;
   propsUsed = { undo: 0, shuffle: 0, remove: 0 };
   lastRemovedTile = null;
+
+  // Update difficulty badge
+  const badge = document.getElementById('diffBadge');
+  badge.textContent = diff.icon + ' ' + diff.name;
+  badge.style.background = diff.color;
 
   showScreen('gameScreen');
 
@@ -859,7 +897,7 @@ function startGame() {
 
 function restartGame() {
   if (timerInterval) clearInterval(timerInterval);
-  startGame();
+  startGame(currentDifficulty);
 }
 
 function restartFromModal() {
