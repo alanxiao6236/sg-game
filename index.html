@@ -412,16 +412,16 @@ const ALL_CHARACTERS = [
 ];
 
 const DIFFICULTIES = {
-  easy:      { name: '简单', desc: '8种卡片 · 5层', chars: 8,  layers: 5,  color: '#27AE60', icon: '🌱' },
-  hard:      { name: '困难', desc: '10种卡片 · 8层', chars: 10, layers: 8,  color: '#E67E22', icon: '🔥' },
-  nightmare: { name: '噩梦', desc: '15种卡片 · 12层', chars: 15, layers: 12, color: '#C0392B', icon: '💀' },
+  easy:      { name: '简单', desc: '8种卡片 · 5层', chars: 8,  layers: 5,  color: '#27AE60', icon: '🌱', tilesPerChar: 6, props: { undo: 2, shuffle: 2, remove: 5 } },
+  hard:      { name: '困难', desc: '10种卡片 · 8层', chars: 10, layers: 8,  color: '#E67E22', icon: '🔥', tilesPerChar: 6, props: { undo: 2, shuffle: 2, remove: 4 } },
+  nightmare: { name: '噩梦', desc: '15种卡片 · 12层', chars: 15, layers: 12, color: '#C0392B', icon: '💀', tilesPerChar: 9, props: { undo: 3, shuffle: 3, remove: 5 } },
 };
 
 let CHARACTERS = [];
 let NUM_LAYERS = 12;
 let currentDifficulty = 'easy';
 
-const TILE_COUNT_PER_CHAR = 6;
+let TILE_COUNT_PER_CHAR = 6;
 const TILE_W = 52;
 const TILE_H = 62;
 const LAYER_OFFSET_X = 5;
