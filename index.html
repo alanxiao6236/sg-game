@@ -233,6 +233,13 @@
     }
     .lb-table tr.highlight td { color: #D94F4F; font-weight: 700; }
     .lb-empty { color: #C4C4C4; padding: 24px 0; font-size: 14px; }
+    .lb-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 8px 0 4px; }
+    .lb-nav-btn {
+      background: none; border: 1.5px solid #D8D0C4; border-radius: 8px;
+      padding: 4px 10px; cursor: pointer; font-size: 14px; color: #8C8C8C;
+    }
+    .lb-nav-btn:active { background: #F5EDE0; }
+    .lb-month-label { font-size: 14px; font-weight: 700; color: #6B5B4B; min-width: 100px; }
 
     /* Character Legend */
     .char-legend {
@@ -833,37 +840,57 @@ function useProp(type) {
 }
 
 // ==================== LEADERBOARD ====================
-function getLeaderboard() {
-  try { return JSON.parse(localStorage.getItem('sg_lb') || '[]'); }
+let lbViewYear = new Date().getFullYear();
+let lbViewMonth = new Date().getMonth(); // 0-indexed
+
+function getMonthKey(y, m) { return 'sg_lb_' + y + '_' + String(m + 1).padStart(2, '0'); }
+function getMonthLabel(y, m) { return y + '年' + (m + 1) + '月'; }
+
+function getLeaderboard(y, m) {
+  if (y === undefined) y = lbViewYear;
+  if (m === undefined) m = lbViewMonth;
+  try { return JSON.parse(localStorage.getItem(getMonthKey(y, m)) || '[]'); }
   catch { return []; }
 }
 
-function saveLeaderboard(lb) {
-  localStorage.setItem('sg_lb', JSON.stringify(lb));
+function saveLeaderboard(lb, y, m) {
+  if (y === undefined) y = lbViewYear;
+  if (m === undefined) m = lbViewMonth;
+  localStorage.setItem(getMonthKey(y, m), JSON.stringify(lb));
 }
 
 function saveScore() {
   const name = (document.getElementById('playerNameInput').value || '无名英雄').trim().slice(0, 8);
   const elapsed = Date.now() - startTime;
   const diff = DIFFICULTIES[currentDifficulty];
-  const lb = getLeaderboard();
-  lb.push({ name, time: elapsed, timeStr: formatTime(elapsed), moves: moveCount, diff: currentDifficulty, diffName: diff.name, date: new Date().toLocaleDateString() });
+  const now = new Date();
+  lbViewYear = now.getFullYear();
+  lbViewMonth = now.getMonth();
+  const lb = getLeaderboard(lbViewYear, lbViewMonth);
+  lb.push({ name, time: elapsed, timeStr: formatTime(elapsed), moves: moveCount, diff: currentDifficulty, diffName: diff.name, date: now.toLocaleDateString() });
   lb.sort((a, b) => a.time - b.time);
-  saveLeaderboard(lb.slice(0, 20));
+  saveLeaderboard(lb.slice(0, 20), lbViewYear, lbViewMonth);
   closeModal('winModal');
   showLeaderboard();
 }
 
 function showLeaderboard() {
   closeModal('winModal');
-  const lb = getLeaderboard();
-  const el = document.getElementById('lbContent');
+  renderLeaderboard();
+  openModal('lbModal');
+}
 
+function renderLeaderboard() {
+  const lb = getLeaderboard(lbViewYear, lbViewMonth);
+  const el = document.getElementById('lbContent');
+  const label = getMonthLabel(lbViewYear, lbViewMonth);
+
+  let tableHtml = '';
   if (lb.length === 0) {
-    el.innerHTML = '<div class="lb-empty">暂无记录<br>快来挑战吧！</div>';
+    tableHtml = '<div class="lb-empty">本月暂无记录<br>快来挑战吧！</div>';
   } else {
     const medals = ['🥇', '🥈', '🥉'];
-    el.innerHTML = `<table class="lb-table">
+    tableHtml = `<table class="lb-table">
       <thead><tr><th>#</th><th>玩家</th><th>难度</th><th>用时</th><th>操作</th></tr></thead>
       <tbody>${lb.slice(0, 10).map((e, i) => `
         <tr>
@@ -875,7 +902,32 @@ function showLeaderboard() {
         </tr>`).join('')}
       </tbody></table>`;
   }
-  openModal('lbModal');
+
+  el.innerHTML = `
+    <div class="lb-nav">
+      <button class="lb-nav-btn" onclick="lbPrev()">&#9664;</button>
+      <span class="lb-month-label">${label}</span>
+      <button class="lb-nav-btn" onclick="lbNext()">&#9654;</button>
+    </div>
+    ${tableHtml}`;
+}
+
+function lbPrev() {
+  lbViewMonth--;
+  if (lbViewMonth < 0) { lbViewMonth = 11; lbViewYear--; }
+  renderLeaderboard();
+}
+
+function lbNext() {
+  const now = new Date();
+  lbViewMonth++;
+  if (lbViewMonth > 11) { lbViewMonth = 0; lbViewYear++; }
+  // Don't go beyond current month
+  if (lbViewYear > now.getFullYear() || (lbViewYear === now.getFullYear() && lbViewMonth > now.getMonth())) {
+    lbViewYear = now.getFullYear();
+    lbViewMonth = now.getMonth();
+  }
+  renderLeaderboard();
 }
 
 // ==================== NAVIGATION ====================
