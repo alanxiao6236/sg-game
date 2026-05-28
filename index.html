@@ -1074,20 +1074,33 @@ function playPhrase(phraseIdx) {
 
 function initMusic() {
   if (audioCtx) return;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  masterGain = audioCtx.createGain();
-  masterGain.gain.value = 0.6;
-  masterGain.connect(audioCtx.destination);
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.6;
+    masterGain.connect(audioCtx.destination);
+  } catch(e) {
+    audioCtx = null;
+  }
 }
 
 function startMusic() {
   initMusic();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!audioCtx) return;
   musicPlaying = true;
   musicMuted = false;
   document.getElementById('musicBtn').classList.remove('muted');
   document.getElementById('musicBtn').textContent = '🎵';
-  playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+  // Resume context first (required on mobile), then play
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => {
+      if (musicPlaying && !musicMuted) {
+        playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+      }
+    });
+  } else {
+    playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+  }
 }
 
 function toggleMusic() {
@@ -1101,7 +1114,12 @@ function toggleMusic() {
     masterGain.gain.value = 0.6;
     document.getElementById('musicBtn').classList.remove('muted');
     document.getElementById('musicBtn').textContent = '🎵';
-    playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+    const doPlay = () => playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(doPlay);
+    } else {
+      doPlay();
+    }
   } else {
     musicMuted = true;
     musicPlaying = false;
@@ -1112,11 +1130,22 @@ function toggleMusic() {
   }
 }
 
-// Auto-start music on first user interaction
-document.addEventListener('click', function autoStartMusic() {
-  if (!audioCtx) startMusic();
+// Auto-start music on first user interaction (click or touch)
+function autoStartMusic() {
+  if (!audioCtx) {
+    startMusic();
+  } else if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => {
+      if (musicPlaying && !musicMuted) {
+        playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+      }
+    });
+  }
   document.removeEventListener('click', autoStartMusic);
-}, { once: true });
+  document.removeEventListener('touchstart', autoStartMusic);
+}
+document.addEventListener('click', autoStartMusic, { once: true });
+document.addEventListener('touchstart', autoStartMusic, { once: true });
 </script>
 </body>
 </html>
