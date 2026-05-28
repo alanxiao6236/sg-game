@@ -63,6 +63,16 @@
       display: inline-block; padding: 2px 8px; border-radius: 10px;
       font-size: 11px; font-weight: 700; color: #fff;
     }
+    .music-btn {
+      position: fixed; top: 10px; right: 10px; z-index: 999;
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 2px solid #D8D0C4; background: #fff;
+      font-size: 18px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      transition: all 0.2s; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .music-btn:active { transform: scale(0.9); }
+    .music-btn.muted { opacity: 0.4; }
 
     /* ===== Game Screen ===== */
     #gameScreen { padding: 8px 12px; }
@@ -236,6 +246,8 @@
   </style>
 </head>
 <body>
+
+<button class="music-btn" id="musicBtn" onclick="toggleMusic()" title="背景音乐">🎵</button>
 
 <!-- ========== START SCREEN ========== -->
 <div id="startScreen" class="screen active">
@@ -925,6 +937,134 @@ function backToStartFromModal() {
   closeModal('lbModal');
   backToStart();
 }
+
+// ==================== BACKGROUND MUSIC ====================
+let audioCtx = null;
+let musicPlaying = false;
+let musicMuted = false;
+let musicTimer = null;
+let masterGain = null;
+
+// Chinese pentatonic scale (宫商角徵羽) frequencies across 2 octaves
+const PENTATONIC = [
+  261.63, 293.66, 329.63, 392.00, 440.00,  // C4 D4 E4 G4 A4
+  523.25, 587.33, 659.25, 783.99, 880.00,  // C5 D5 E5 G5 A5
+];
+
+// Pre-composed melody phrases (note indices into PENTATONIC, -1 = rest)
+const MELODY_PHRASES = [
+  [4, 3, 2, 0, 1, 2, -1, 0],
+  [2, 3, 4, 7, 6, 4, -1, 3],
+  [0, 2, 4, 3, 2, 1, 0, -1],
+  [7, 6, 4, 3, 4, 6, 7, -1],
+  [9, 7, 6, 4, 3, 2, -1, 0],
+  [3, 4, 6, 7, 6, 4, 2, -1],
+  [1, 2, 3, 4, 2, 0, -1, -1],
+  [6, 4, 3, 2, 0, 1, 3, -1],
+];
+
+function playNote(freq, time, duration) {
+  if (!audioCtx || musicMuted) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  // Guzheng-like plucked string: triangle wave + low-pass filter
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, time);
+  // Slight vibrato
+  const vibrato = audioCtx.createOscillator();
+  const vibratoGain = audioCtx.createGain();
+  vibrato.frequency.value = 5;
+  vibratoGain.gain.value = 2;
+  vibrato.connect(vibratoGain);
+  vibratoGain.connect(osc.frequency);
+  vibrato.start(time);
+  vibrato.stop(time + duration);
+
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(freq * 4, time);
+  filter.frequency.exponentialRampToValueAtTime(freq * 1.5, time + duration * 0.6);
+
+  // Pluck envelope: fast attack, natural decay
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(0.12, time + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(masterGain);
+
+  osc.start(time);
+  osc.stop(time + duration);
+}
+
+function playPhrase(phraseIdx) {
+  if (!audioCtx || musicMuted) return;
+  const phrase = MELODY_PHRASES[phraseIdx % MELODY_PHRASES.length];
+  const now = audioCtx.currentTime;
+  const noteLen = 0.55;
+
+  phrase.forEach((noteIdx, i) => {
+    if (noteIdx >= 0 && noteIdx < PENTATONIC.length) {
+      playNote(PENTATONIC[noteIdx], now + i * noteLen, noteLen * 1.4);
+    }
+  });
+
+  // Schedule next phrase
+  const phraseDuration = phrase.length * noteLen * 1000 + 800;
+  musicTimer = setTimeout(() => {
+    if (musicPlaying && !musicMuted) {
+      playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+    }
+  }, phraseDuration);
+}
+
+function initMusic() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.6;
+  masterGain.connect(audioCtx.destination);
+}
+
+function startMusic() {
+  initMusic();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  musicPlaying = true;
+  musicMuted = false;
+  document.getElementById('musicBtn').classList.remove('muted');
+  document.getElementById('musicBtn').textContent = '🎵';
+  playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+}
+
+function toggleMusic() {
+  if (!audioCtx) {
+    startMusic();
+    return;
+  }
+  if (musicMuted) {
+    musicMuted = false;
+    musicPlaying = true;
+    masterGain.gain.value = 0.6;
+    document.getElementById('musicBtn').classList.remove('muted');
+    document.getElementById('musicBtn').textContent = '🎵';
+    playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+  } else {
+    musicMuted = true;
+    musicPlaying = false;
+    if (musicTimer) clearTimeout(musicTimer);
+    masterGain.gain.value = 0;
+    document.getElementById('musicBtn').classList.add('muted');
+    document.getElementById('musicBtn').textContent = '🔇';
+  }
+}
+
+// Auto-start music on first user interaction
+document.addEventListener('click', function autoStartMusic() {
+  if (!audioCtx) startMusic();
+  document.removeEventListener('click', autoStartMusic);
+}, { once: true });
 </script>
 </body>
 </html>
