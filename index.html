@@ -1101,6 +1101,19 @@ function initMusic() {
   }
 }
 
+function resumeAndPlay() {
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => {
+      if (audioCtx.state === 'running' && musicPlaying && !musicMuted) {
+        playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+      }
+    }).catch(() => {});
+  } else if (musicPlaying && !musicMuted) {
+    playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+  }
+}
+
 function startMusic() {
   initMusic();
   if (!audioCtx) return;
@@ -1108,16 +1121,7 @@ function startMusic() {
   musicMuted = false;
   document.getElementById('musicBtn').classList.remove('muted');
   document.getElementById('musicBtn').textContent = '🎵';
-  // Resume context first (required on mobile), then play
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume().then(() => {
-      if (musicPlaying && !musicMuted) {
-        playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
-      }
-    });
-  } else {
-    playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
-  }
+  resumeAndPlay();
 }
 
 function toggleMusic() {
@@ -1125,47 +1129,42 @@ function toggleMusic() {
     startMusic();
     return;
   }
-  if (musicMuted) {
+  if (musicMuted || !musicPlaying) {
     musicMuted = false;
     musicPlaying = true;
-    masterGain.gain.value = 0.6;
+    if (masterGain) masterGain.gain.value = 0.6;
     document.getElementById('musicBtn').classList.remove('muted');
     document.getElementById('musicBtn').textContent = '🎵';
-    const doPlay = () => playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume().then(doPlay);
-    } else {
-      doPlay();
-    }
+    resumeAndPlay();
   } else {
     musicMuted = true;
     musicPlaying = false;
     if (musicTimer) clearTimeout(musicTimer);
-    masterGain.gain.value = 0;
+    if (masterGain) masterGain.gain.value = 0;
     document.getElementById('musicBtn').classList.add('muted');
     document.getElementById('musicBtn').textContent = '🔇';
   }
 }
 
-// Auto-start music on first user interaction (click or touch)
-function autoStartMusic() {
-  if (!audioCtx) {
-    startMusic();
-  } else if (audioCtx.state === 'suspended') {
+// Try to start music on any user interaction (mobile-friendly)
+function tryStartMusic() {
+  if (musicPlaying && audioCtx && audioCtx.state === 'running') return; // already playing
+  if (!audioCtx) initMusic();
+  if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume().then(() => {
-      if (musicPlaying && !musicMuted) {
-        playPhrase(Math.floor(Math.random() * MELODY_PHRASES.length));
+      if (audioCtx.state === 'running') {
+        if (!musicPlaying) startMusic();
+        else resumeAndPlay();
       }
-    });
+    }).catch(() => {});
+  } else if (!musicPlaying) {
+    startMusic();
   }
-  document.removeEventListener('click', autoStartMusic);
-  document.removeEventListener('touchstart', autoStartMusic);
 }
-document.addEventListener('click', autoStartMusic, { once: true });
-document.addEventListener('touchstart', autoStartMusic, { once: true });
-</script>
-</body>
-</html>
+// Listen to multiple events for mobile compatibility
+['click', 'touchstart', 'touchend'].forEach(evt => {
+  document.addEventListener(evt, tryStartMusic, { passive: true });
+});
 </script>
 </body>
 </html>
