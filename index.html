@@ -511,24 +511,37 @@ function generateTiles() {
   const padY = 10;
   const usableW = areaW - TILE_W - padX * 2 - (NUM_LAYERS - 1) * LAYER_OFFSET_X;
   const usableH = areaH - TILE_H - padY * 2 - (NUM_LAYERS - 1) * LAYER_OFFSET_Y;
+  const maxW = Math.max(usableW, 60);
+  const maxH = Math.max(usableH, 60);
 
   // Top layers use grid-based placement to prevent same-layer overlap
   const TOP_LAYERS = 3;
-  const gridCols = Math.max(3, Math.floor(Math.max(usableW, 60) / (TILE_W + 6)));
-  const gridRows = Math.max(3, Math.floor(Math.max(usableH, 60) / (TILE_H + 4)));
-  const gridCellW = Math.max(usableW, 60) / gridCols;
-  const gridCellH = Math.max(usableH, 60) / gridRows;
+  // Randomize grid dimensions each game for variety
+  const baseCols = Math.max(3, Math.floor(maxW / (TILE_W + 6)));
+  const baseRows = Math.max(3, Math.floor(maxH / (TILE_H + 4)));
+  const gridCols = baseCols + Math.floor(Math.random() * 3) - 1; // ±1
+  const gridRows = baseRows + Math.floor(Math.random() * 3) - 1;
+  const gridCellW = maxW / Math.max(gridCols, 1);
+  const gridCellH = maxH / Math.max(gridRows, 1);
+  // Random global offset for grid each game
+  const gridOffsetX = (Math.random() - 0.5) * gridCellW * 0.4;
+  const gridOffsetY = (Math.random() - 0.5) * gridCellH * 0.4;
 
   // Pre-generate shuffled grid positions for each top layer
   const topLayerOffset = NUM_LAYERS - TOP_LAYERS;
   const topLayerGrids = [];
   for (let l = 0; l < TOP_LAYERS; l++) {
     const positions = [];
+    // Each top layer gets its own random jitter
+    const layerJitterX = (Math.random() - 0.5) * gridCellW * 0.3;
+    const layerJitterY = (Math.random() - 0.5) * gridCellH * 0.3;
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
+        const jitterX = (Math.random() - 0.5) * gridCellW * 0.5;
+        const jitterY = (Math.random() - 0.5) * gridCellH * 0.5;
         positions.push({
-          x: padX + c * gridCellW + (gridCellW - TILE_W) / 2 + (Math.random() - 0.5) * 4,
-          y: padY + r * gridCellH + (gridCellH - TILE_H) / 2 + (Math.random() - 0.5) * 4,
+          x: padX + c * gridCellW + (gridCellW - TILE_W) / 2 + jitterX + layerJitterX + gridOffsetX,
+          y: padY + r * gridCellH + (gridCellH - TILE_H) / 2 + jitterY + layerJitterY + gridOffsetY,
         });
       }
     }
@@ -549,8 +562,8 @@ function generateTiles() {
       lx = pos.x;
       ly = pos.y;
     } else {
-      lx = padX + Math.random() * Math.max(usableW, 60);
-      ly = padY + Math.random() * Math.max(usableH, 60);
+      lx = padX + Math.random() * maxW;
+      ly = padY + Math.random() * maxH;
     }
 
     tiles.push({
@@ -937,6 +950,10 @@ function startGame(difficulty) {
   const diff = DIFFICULTIES[currentDifficulty];
   CHARACTERS = ALL_CHARACTERS.slice(0, diff.chars);
   NUM_LAYERS = diff.layers;
+  TILE_COUNT_PER_CHAR = diff.tilesPerChar;
+  PROP_MAX.undo = diff.props.undo;
+  PROP_MAX.shuffle = diff.props.shuffle;
+  PROP_MAX.remove = diff.props.remove;
 
   gameOver = false;
   slots = [];
@@ -1146,6 +1163,9 @@ function autoStartMusic() {
 }
 document.addEventListener('click', autoStartMusic, { once: true });
 document.addEventListener('touchstart', autoStartMusic, { once: true });
+</script>
+</body>
+</html>
 </script>
 </body>
 </html>
